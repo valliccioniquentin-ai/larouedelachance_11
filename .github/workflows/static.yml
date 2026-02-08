@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wheel Pro Evolution</title>
+    <style>
+        :root {
+            --accent: #00d2ff;
+            --accent-dark: #3a7bd5;
+            --bg-dark: #1a1c20;
+            --sidebar-bg: #25282e;
+            --text-light: #f5f6fa;
+            --glass: rgba(255, 255, 255, 0.05);
+        }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-light);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* --- Barre Latérale Style "Dashboard" --- */
+        .sidebar {
+            width: 320px;
+            background: var(--sidebar-bg);
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            border-right: 1px solid rgba(255,255,255,0.1);
+            overflow-y: auto;
+        }
+
+        .logo-box {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--glass);
+        }
+
+        .icon-gear {
+            width: 30px; height: 30px;
+            border: 3px dashed var(--accent);
+            border-radius: 50%;
+        }
+
+        .section-title {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--accent);
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        /* --- Inputs --- */
+        textarea, select, input {
+            width: 100%;
+            background: var(--bg-dark);
+            border: 1px solid var(--glass);
+            border-radius: 8px;
+            color: white;
+            padding: 10px;
+            box-sizing: border-box;
+            outline: none;
+        }
+
+        .slider-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        button {
+            background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+            color: white;
+            border: none;
+            padding: 14px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        button:active { transform: scale(0.98); }
+
+        /* --- Zone Principale --- */
+        .main {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at center, #2c3e50 0%, #000000 100%);
+        }
+
+        .wheel-box {
+            position: relative;
+            cursor: pointer;
+        }
+
+        /* Curseur SVG */
+        .pointer-svg {
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 50px;
+            z-index: 10;
+            filter: drop-shadow(0 0 10px var(--accent));
+        }
+
+        #wheel {
+            border: 10px solid var(--sidebar-bg);
+            border-radius: 50%;
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+            transition: transform 5s cubic-bezier(0.15, 0, 0.15, 1);
+        }
+
+        #result-banner {
+            margin-top: 50px;
+            font-size: 2.5rem;
+            font-weight: 900;
+            text-shadow: 0 0 20px var(--accent);
+            height: 60px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div class="logo-box">
+            <div class="icon-gear"></div>
+            <h2 style="margin:0">CONFIGURATEUR</h2>
+        </div>
+
+        <div>
+            <div class="section-title">Choix possibles</div>
+            <textarea id="list" rows="6">Choix 1&#10;Choix 2&#10;Choix 3&#10;Choix 4</textarea>
+        </div>
+
+        <div class="slider-group">
+            <div class="section-title">Temps de rotation (sec)</div>
+            <input type="range" id="duration" min="2" max="15" value="5">
+            <span id="duration-val">5 secondes</span>
+        </div>
+
+        <div>
+            <div class="section-title">Son de rotation</div>
+            <select id="spin-sound">
+                <option value="click">Tic-Tac Mécanique</option>
+                <option value="beep">Bip Électronique</option>
+                <option value="none">Muet</option>
+            </select>
+        </div>
+
+        <div>
+            <div class="section-title">Son de victoire</div>
+            <select id="win-sound">
+                <option value="fanfare">Fanfare Triomphale</option>
+                <option value="bell">Cloche d'Or</option>
+                <option value="none">Muet</option>
+            </select>
+        </div>
+
+        <button onclick="updateWheel()">APPLIQUER LES CHANGEMENTS</button>
+    </div>
+
+    <div class="main">
+        <div class="wheel-box" onclick="spinWheel()">
+            <svg class="pointer-svg" viewBox="0 0 100 100">
+                <polygon points="50,100 20,0 80,0" fill="#00d2ff"/>
+            </svg>
+            <canvas id="wheel" width="550" height="550"></canvas>
+        </div>
+        <div id="result-banner"></div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('wheel');
+        const ctx = canvas.getContext('2d');
+        const durationInput = document.getElementById('duration');
+        const durationVal = document.getElementById('duration-val');
+        const resultBanner = document.getElementById('result-banner');
+        
+        let options = [];
+        let currentRotation = 0;
+        let isSpinning = false;
+        const colors = ['#00d2ff', '#3a7bd5', '#6c5ce7', '#a29bfe', '#00cec9', '#0984e3'];
+
+        // --- Audio Engine (No files needed) ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playSound(type) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            if (type === 'click') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.05);
+            } else if (type === 'fanfare') {
+                [440, 554, 659].forEach((f, i) => {
+                    const o = audioCtx.createOscillator();
+                    const g = audioCtx.createGain();
+                    o.connect(g); g.connect(audioCtx.destination);
+                    o.frequency.value = f;
+                    g.gain.setValueAtTime(0.1, audioCtx.currentTime + i*0.1);
+                    g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                    o.start(audioCtx.currentTime + i*0.1); o.stop(audioCtx.currentTime + 0.5);
+                });
+            }
+        }
+
+        // --- Logique Roue ---
+        durationInput.oninput = () => durationVal.innerText = durationInput.value + " secondes";
+
+        function updateWheel() {
+            options = document.getElementById('list').value.split('\n').filter(t => t.trim() !== "");
+            drawWheel();
+        }
+
+        function drawWheel() {
+            const size = canvas.width;
+            const center = size / 2;
+            const radius = center - 20;
+            const arcSize = (2 * Math.PI) / options.length;
+
+            ctx.clearRect(0, 0, size, size);
+
+            options.forEach((opt, i) => {
+                const angle = i * arcSize;
+                ctx.beginPath();
+                ctx.fillStyle = colors[i % colors.length];
+                ctx.moveTo(center, center);
+                ctx.arc(center, center, radius, angle, angle + arcSize);
+                ctx.fill();
+                
+                ctx.save();
+                ctx.translate(center, center);
+                ctx.rotate(angle + arcSize / 2);
+                ctx.textAlign = "right";
+                ctx.fillStyle = "white";
+                ctx.font = "bold 20px sans-serif";
+                ctx.fillText(opt, radius - 40, 10);
+                ctx.restore();
+            });
+        }
+
+        function spinWheel() {
+            if (isSpinning || options.length < 2) return;
+            
+            isSpinning = true;
+            resultBanner.innerText = "";
+            const duration = parseInt(durationInput.value);
+            
+            // Appliquer la durée dynamiquement
+            canvas.style.transition = `transform ${duration}s cubic-bezier(0.15, 0, 0.15, 1)`;
+            
+            const extraRotation = Math.floor(Math.random() * 360) + (360 * (duration * 2)); 
+            currentRotation += extraRotation;
+            canvas.style.transform = `rotate(${currentRotation}deg)`;
+
+            // Effet sonore durant la rotation (simulé)
+            let clickInterval = setInterval(() => {
+                if (document.getElementById('spin-sound').value !== 'none') playSound('click');
+            }, 200);
+
+            setTimeout(() => {
+                clearInterval(clickInterval);
+                isSpinning = false;
+                if (document.getElementById('win-sound').value !== 'none') playSound('fanfare');
+                determineWinner();
+            }, duration * 1000);
+        }
+
+        function determineWinner() {
+            const actualAngle = currentRotation % 360;
+            const arcSizeDeg = 360 / options.length;
+            const index = Math.floor((360 - actualAngle + 270) % 360 / arcSizeDeg);
+            resultBanner.innerText = "🏆 " + options[index];
+        }
+
+        updateWheel();
+    </script>
+</body>
+</html>
